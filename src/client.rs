@@ -23,7 +23,6 @@ impl Client {
     pub fn new_with_token(url: &str, token: &str) -> Client {
         let http_client = reqwest::Client::new();
         let url = Client::parse_url(url).to_string();
-        println!("parsed url: {}", url);
         Client {
             url,
             token: token.to_string(),
