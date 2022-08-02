@@ -70,7 +70,7 @@ impl Client {
     pub async fn delete_all_deployments_on_server<Callback>(
         &self,
         server_id: &str,
-        on_delete: Option<Callback>,
+        on_delete: impl Into<Option<Callback>>,
     ) -> Result<(), reqwest::Error>
     where
         Callback: Fn(Deployment) -> (),
@@ -82,7 +82,7 @@ impl Client {
             .filter(|d| d.server_id == server_id)
             .collect();
 
-        if let Some(on_delete) = on_delete {
+        if let Some(on_delete) = on_delete.into() {
             for deployment in deployments {
                 self.delete_deployment(&deployment.id.unwrap().to_string())
                     .await?;
