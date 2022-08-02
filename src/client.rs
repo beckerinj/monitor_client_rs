@@ -63,6 +63,26 @@ impl Client {
             .await
     }
 
+    pub async fn get_deployments(&self) -> Result<Vec<Deployment>, reqwest::Error> {
+        self.get("/api/deployments").await
+    }
+
+    pub async fn delete_all_deployments_on_server(&self, server_id: &str, on_delete: Option<fn(Deployment) -> ()>) -> Result<(), reqwest::Error> {
+        let deployments: Vec<Deployment> = self.get_deployments().await?
+            .into_iter()
+            .filter(|d| d.server_id == server_id)
+            .collect();
+
+        for deployment in deployments {
+            self.delete_deployment(&deployment.id.unwrap().to_string()).await?;
+            if let Some(on_delete) = on_delete {
+                on_delete(deployment);
+            }
+        }
+        
+        Ok(())
+    }
+
     async fn login(client: &reqwest::Client, url: &str, username: &str, password: &str) -> String {
         client
             .post(format!("{url}/login/local"))
