@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use serde::{de::DeserializeOwned, Serialize};
 
 use crate::types::{CreateDeploymentBody, Deployment, LoginCredentials};
@@ -63,7 +65,7 @@ impl Client {
             .await
     }
 
-    pub async fn get_deployments(&self) -> Result<Vec<Deployment>, reqwest::Error> {
+    pub async fn get_deployments(&self) -> Result<HashMap<String, Deployment>, reqwest::Error> {
         self.get("/api/deployments").await
     }
 
@@ -75,22 +77,22 @@ impl Client {
     where
         Callback: Fn(Deployment) -> (),
     {
-        let deployments: Vec<Deployment> = self
+        let deployments: Vec<(String, Deployment)> = self
             .get_deployments()
             .await?
             .into_iter()
-            .filter(|d| d.server_id == server_id)
+            .filter(|(_, d)| d.server_id == server_id)
             .collect();
 
         if let Some(on_delete) = on_delete.into() {
-            for deployment in deployments {
-                self.delete_deployment(&deployment.id.unwrap().to_string())
+            for (id, deployment) in deployments {
+                self.delete_deployment(&id)
                     .await?;
                 on_delete(deployment);
             }
         } else {
-            for deployment in deployments {
-                self.delete_deployment(&deployment.id.unwrap().to_string())
+            for (id, _) in deployments {
+                self.delete_deployment(&id)
                     .await?;
             }
         }
