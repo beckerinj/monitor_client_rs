@@ -67,19 +67,34 @@ impl Client {
         self.get("/api/deployments").await
     }
 
-    pub async fn delete_all_deployments_on_server(&self, server_id: &str, on_delete: Option<fn(Deployment) -> ()>) -> Result<(), reqwest::Error> {
-        let deployments: Vec<Deployment> = self.get_deployments().await?
+    pub async fn delete_all_deployments_on_server<Callback>(
+        &self,
+        server_id: &str,
+        on_delete: Option<Callback>,
+    ) -> Result<(), reqwest::Error>
+    where
+        Callback: Fn(Deployment) -> (),
+    {
+        let deployments: Vec<Deployment> = self
+            .get_deployments()
+            .await?
             .into_iter()
             .filter(|d| d.server_id == server_id)
             .collect();
 
-        for deployment in deployments {
-            self.delete_deployment(&deployment.id.unwrap().to_string()).await?;
-            if let Some(on_delete) = on_delete {
+        if let Some(on_delete) = on_delete {
+            for deployment in deployments {
+                self.delete_deployment(&deployment.id.unwrap().to_string())
+                    .await?;
                 on_delete(deployment);
             }
+        } else {
+            for deployment in deployments {
+                self.delete_deployment(&deployment.id.unwrap().to_string())
+                    .await?;
+            }
         }
-        
+
         Ok(())
     }
 
