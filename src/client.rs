@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use reqwest::StatusCode;
 use serde::{de::DeserializeOwned, Serialize};
 
 use crate::types::{CreateDeploymentBody, Deployment, LoginCredentials};
@@ -43,7 +44,7 @@ impl Client {
     pub async fn create_deployment(
         &self,
         deployment: Deployment,
-    ) -> Result<Deployment, reqwest::Error> {
+    ) -> Result<Deployment, String> {
         self.post::<CreateDeploymentBody, Deployment>(
             "/api/deployment/create",
             deployment.into_create_body(),
@@ -51,21 +52,21 @@ impl Client {
         .await
     }
 
-    pub async fn deploy(&self, deployment_id: &str) -> Result<String, reqwest::Error> {
+    pub async fn deploy(&self, deployment_id: &str) -> Result<String, String> {
         self.get_string(&format!("/api/deployment/{deployment_id}/deploy"))
             .await
     }
 
-    pub async fn get_deployment(&self, deployment_id: &str) -> Result<Deployment, reqwest::Error> {
+    pub async fn get_deployment(&self, deployment_id: &str) -> Result<Deployment, String> {
         self.get(&format!("/api/deployment/{deployment_id}")).await
     }
 
-    pub async fn delete_deployment(&self, deployment_id: &str) -> Result<String, reqwest::Error> {
+    pub async fn delete_deployment(&self, deployment_id: &str) -> Result<String, String> {
         self.delete_string(&format!("/api/deployment/{deployment_id}/delete"))
             .await
     }
 
-    pub async fn get_deployments(&self) -> Result<HashMap<String, Deployment>, reqwest::Error> {
+    pub async fn get_deployments(&self) -> Result<HashMap<String, Deployment>, String> {
         self.get("/api/deployments").await
     }
 
@@ -73,7 +74,7 @@ impl Client {
         &self,
         server_id: &str,
         on_delete: impl Into<Option<Callback>>,
-    ) -> Result<(), reqwest::Error>
+    ) -> Result<(), String>
     where
         Callback: Fn(Deployment) -> (),
     {
@@ -86,14 +87,12 @@ impl Client {
 
         if let Some(on_delete) = on_delete.into() {
             for (id, deployment) in deployments {
-                self.delete_deployment(&id)
-                    .await?;
+                self.delete_deployment(&id).await?;
                 on_delete(deployment);
             }
         } else {
             for (id, _) in deployments {
-                self.delete_deployment(&id)
-                    .await?;
+                self.delete_deployment(&id).await?;
             }
         }
 
@@ -112,59 +111,139 @@ impl Client {
             .unwrap()
     }
 
-    async fn get<R: DeserializeOwned>(&self, endpoint: &str) -> Result<R, reqwest::Error> {
-        self.http_client
+    async fn get<R: DeserializeOwned>(&self, endpoint: &str) -> Result<R, String> {
+        let res = self.http_client
             .get(format!("{}{endpoint}", self.url))
             .header("Authorization", format!("Bearer {}", self.token))
             .send()
-            .await?
-            .json()
-            .await
+            .await;
+        match res {
+            Ok(res) => {
+                let status = res.status();
+                if status == StatusCode::OK {
+                    match res.json().await {
+                        Ok(res) => Ok(res),
+                        Err(e) => Err(format!("{status}: {e:#?}")),
+                    }
+                } else {
+                    match res.text().await {
+                        Ok(res) => Err(format!("{status}: {res}")),
+                        Err(e) => Err(format!("{status}: {e:#?}"))
+                    }
+                }
+            }
+            Err(e) => Err(format!("{e:#?}")),
+        }
     }
 
-    async fn get_string(&self, endpoint: &str) -> Result<String, reqwest::Error> {
-        self.http_client
+    async fn get_string(&self, endpoint: &str) -> Result<String, String> {
+        let res = self
+            .http_client
             .get(format!("{}{endpoint}", self.url))
             .header("Authorization", format!("Bearer {}", self.token))
             .send()
-            .await?
-            .text()
-            .await
+            .await;
+
+        match res {
+            Ok(res) => {
+                let status = res.status();
+                if status == StatusCode::OK {
+                    match res.text().await {
+                        Ok(res) => Ok(res),
+                        Err(e) => Err(format!("{status}: {e:#?}")),
+                    }
+                } else {
+                    match res.text().await {
+                        Ok(res) => Err(format!("{status}: {res}")),
+                        Err(e) => Err(format!("{status}: {e:#?}"))
+                    }
+                }
+            }
+            Err(e) => Err(format!("{e:#?}")),
+        }
     }
 
     async fn post<B: Serialize, R: DeserializeOwned>(
         &self,
         endpoint: &str,
         body: B,
-    ) -> Result<R, reqwest::Error> {
-        self.http_client
+    ) -> Result<R, String> {
+        let res = self.http_client
             .post(format!("{}{endpoint}", self.url))
             .header("Authorization", format!("Bearer {}", self.token))
             .header("Content-Type", "application/json")
             .json(&body)
             .send()
-            .await?
-            .json()
-            .await
+            .await;
+        
+        match res {
+            Ok(res) => {
+                let status = res.status();
+                if status == StatusCode::OK {
+                    match res.json().await {
+                        Ok(res) => Ok(res),
+                        Err(e) => Err(format!("{status}: {e:#?}")),
+                    }
+                } else {
+                    match res.text().await {
+                        Ok(res) => Err(format!("{status}: {res}")),
+                        Err(e) => Err(format!("{status}: {e:#?}"))
+                    }
+                }
+            }
+            Err(e) => Err(format!("{e:#?}")),
+        }
     }
 
-    async fn delete<R: DeserializeOwned>(&self, endpoint: &str) -> Result<R, reqwest::Error> {
-        self.http_client
+    async fn delete<R: DeserializeOwned>(&self, endpoint: &str) -> Result<R, String> {
+        let res = self.http_client
             .delete(format!("{}{endpoint}", self.url))
             .header("Authorization", format!("Bearer {}", self.token))
             .send()
-            .await?
-            .json()
-            .await
+            .await;
+
+        match res {
+            Ok(res) => {
+                let status = res.status();
+                if status == StatusCode::OK {
+                    match res.json().await {
+                        Ok(res) => Ok(res),
+                        Err(e) => Err(format!("{status}: {e:#?}")),
+                    }
+                } else {
+                    match res.text().await {
+                        Ok(res) => Err(format!("{status}: {res}")),
+                        Err(e) => Err(format!("{status}: {e:#?}"))
+                    }
+                }
+            }
+            Err(e) => Err(format!("{e:#?}")),
+        }
     }
 
-    async fn delete_string(&self, endpoint: &str) -> Result<String, reqwest::Error> {
-        self.http_client
+    async fn delete_string(&self, endpoint: &str) -> Result<String, String> {
+        let res = self.http_client
             .delete(format!("{}{endpoint}", self.url))
             .header("Authorization", format!("Bearer {}", self.token))
             .send()
-            .await?
-            .text()
-            .await
+            .await;
+
+        match res {
+            Ok(res) => {
+                let status = res.status();
+                if status == StatusCode::OK {
+                    match res.text().await {
+                        Ok(res) => Ok(res),
+                        Err(e) => Err(format!("{status}: {e:#?}")),
+                    }
+                } else {
+                    match res.text().await {
+                        Ok(res) => Err(format!("{status}: {res}")),
+                        Err(e) => Err(format!("{status}: {e:#?}"))
+                    }
+                }
+            }
+            Err(e) => Err(format!("{e:#?}")),
+        }
     }
 }
