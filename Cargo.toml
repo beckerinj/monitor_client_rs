@@ -1,6 +1,6 @@
 [package]
 name = "monitor_client_rs"
-version = "0.0.1"
+version = "0.0.5"
 edition = "2021"
 authors = ["MoghTech"]
 description = "client to simplify access to the monitor api."

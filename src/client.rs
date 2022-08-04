@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use serde::{de::DeserializeOwned, Serialize};
 
 use crate::types::{CreateDeploymentBody, Deployment, LoginCredentials};
@@ -61,6 +63,41 @@ impl Client {
     pub async fn delete_deployment(&self, deployment_id: &str) -> Result<String, reqwest::Error> {
         self.delete_string(&format!("/api/deployment/{deployment_id}/delete"))
             .await
+    }
+
+    pub async fn get_deployments(&self) -> Result<HashMap<String, Deployment>, reqwest::Error> {
+        self.get("/api/deployments").await
+    }
+
+    pub async fn delete_all_deployments_on_server<Callback>(
+        &self,
+        server_id: &str,
+        on_delete: impl Into<Option<Callback>>,
+    ) -> Result<(), reqwest::Error>
+    where
+        Callback: Fn(Deployment) -> (),
+    {
+        let deployments: Vec<(String, Deployment)> = self
+            .get_deployments()
+            .await?
+            .into_iter()
+            .filter(|(_, d)| d.server_id == server_id)
+            .collect();
+
+        if let Some(on_delete) = on_delete.into() {
+            for (id, deployment) in deployments {
+                self.delete_deployment(&id)
+                    .await?;
+                on_delete(deployment);
+            }
+        } else {
+            for (id, _) in deployments {
+                self.delete_deployment(&id)
+                    .await?;
+            }
+        }
+
+        Ok(())
     }
 
     async fn login(client: &reqwest::Client, url: &str, username: &str, password: &str) -> String {
